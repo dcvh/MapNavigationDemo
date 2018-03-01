@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--<color name="colorPrimary">#3F51B5</color>-->
+    <color name="colorPrimary">@color/royal_blue</color>
+    <color name="colorPrimaryDark">@color/free_speech_blue</color>
+    <color name="colorAccent">#FF4081</color>
+
+    <color name="royal_blue">#4386f4</color>
+    <color name="free_speech_blue">#376cc4</color>
+    <color name="corn_flower_blue">#6fa0f3</color>
+</resources>
