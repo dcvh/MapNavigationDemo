@@ -31,20 +31,25 @@ public class DirectionUtil {
     private static final String DEFAULT_MODE = "driving";
 
     public static void removeAllPolylines(List<Polyline> polylines) {
-        for (Polyline polyline : polylines) {
-            polyline.remove();
+        if (polylines != null) {
+            for (Polyline polyline : polylines) {
+                polyline.remove();
+            }
+            polylines.clear();
         }
-        polylines.clear();
     }
 
     @NonNull
-    public static String getDirectionUrl(@NonNull String originId, @NonNull String destinationId, @Nullable String mode) {
+    public static String getDirectionUrl(@NonNull LatLng originLatLng, @NonNull LatLng destLatLng,
+                                         @Nullable String mode) {
         if (mode == null) {
             mode = DEFAULT_MODE;
         }
+        String origin = String.format("%s,%s", originLatLng.latitude, originLatLng.longitude);
+        String destination = String.format("%s,%s", destLatLng.latitude, destLatLng.longitude);
         return mBaseMapsUri.buildUpon()
-                .appendQueryParameter("origin", "place_id:" + originId)
-                .appendQueryParameter("destination", "place_id:" + destinationId)
+                .appendQueryParameter("origin", origin)
+                .appendQueryParameter("destination", destination)
                 .appendQueryParameter("mode", mode)                     // driving, walking, bicycling, transit
                 .appendQueryParameter("alternatives", "true")           // alternative routes
                 .appendQueryParameter("key", MAPS_API_KEY)

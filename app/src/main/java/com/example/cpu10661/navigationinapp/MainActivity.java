@@ -1,10 +1,15 @@
 package com.example.cpu10661.navigationinapp;
 
+import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.location.Location;
 import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.design.widget.BottomSheetBehavior;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
@@ -34,8 +39,11 @@ import com.example.cpu10661.navigationinapp.Utils.PolyUtil;
 import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
 import com.google.android.gms.common.GooglePlayServicesRepairableException;
 import com.google.android.gms.common.api.Status;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.places.Place;
 import com.google.android.gms.location.places.ui.PlaceAutocomplete;
+import com.google.android.gms.maps.CameraUpdate;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -43,6 +51,7 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
+import com.google.android.gms.tasks.OnSuccessListener;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -57,6 +66,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private static final int DEFAULT_ZOOM_LEVEL = 16;
     private static final int RC_CHOOSE_DEPARTURE = 1;
     private static final int RC_CHOOSE_DESTINATION = 2;
+    private static final int RC_LOCATION_PERMISSIONS = 3;
 
     private static final String DEFAULT_MODE = "driving";
 
@@ -65,6 +75,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private SupportMapFragment mMapFragment;
     private Place mOrigin, mDestination;
+    private LatLng mCurrentLatLng;      // workaround to enable current location feature
     @NonNull
     private List<Polyline> mPolylines = new ArrayList<>();
     private int mPrimaryRouteIdx = 0;
@@ -73,6 +84,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private int mAlternativeRoutesColor = Color.GRAY;
 
     private RequestQueue mRequestQueue;
+    private FusedLocationProviderClient mFusedLocationClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -85,6 +97,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         initVolleyComponents();
 
         mPrimaryRouteColor = ContextCompat.getColor(this, R.color.colorPrimary);
+
+        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
     }
 
     private void initToolbar() {
@@ -150,7 +164,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private void setUpBottomSheet() {
         LinearLayout bottomSheetLinearLayout = findViewById(R.id.ll_bottom_sheet);
         mBottomSheetBehavior = BottomSheetBehavior.from(bottomSheetLinearLayout);
-        mBottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+        mBottomSheetBehavior.setHideable(true);
+        mBottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
 
         mBottomSheetBehavior.setBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
             @Override
@@ -197,12 +212,51 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 //        showDirections("ChIJM0vYoOwudTERalKdR-Apj7k", "ChIJ3eH0BhwvdTERPZpT1PEAOQQ");
 
         map.setOnPolylineClickListener(this);
+
+        enableLocationFeatures();
+    }
+
+    @SuppressLint("MissingPermission")
+    private void enableLocationFeatures() {
+        String[] permissions = new String[] { Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION };
+        if (!isPermissionsGranted(permissions)) {
+            ActivityCompat.requestPermissions(this, permissions, RC_LOCATION_PERMISSIONS);
+        } else {
+            // get current location
+            mFusedLocationClient.getLastLocation().addOnSuccessListener(this, new OnSuccessListener<Location>() {
+                @Override
+                public void onSuccess(Location location) {
+                    if (location != null) {
+                        mCurrentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+                        mMapFragment.getMapAsync(new OnMapReadyCallback() {
+                            @Override
+                            public void onMapReady(GoogleMap googleMap) {
+                                googleMap.setMyLocationEnabled(true);
+                                googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
+                                        mCurrentLatLng, DEFAULT_ZOOM_LEVEL));
+                            }
+                        });
+                    }
+                }
+            });
+        }
+    }
+
+    private boolean isPermissionsGranted(String... permissions) {
+        boolean result = true;
+        for (String permission : permissions) {
+            result &= ActivityCompat.checkSelfPermission(this, permission)
+                    == PackageManager.PERMISSION_GRANTED;
+        }
+        return result;
     }
 
     @Override
     public void onPolylineClick(Polyline clickedPolyline) {
         mPrimaryRouteIdx = (int) clickedPolyline.getTag();
-        showDirections(mOrigin.getId(), mDestination.getId());
+        LatLng originLatLng = mOrigin != null ? mOrigin.getLatLng() : mCurrentLatLng;
+        showDirections(originLatLng, mDestination.getLatLng(), false);
     }
 
     @Override
@@ -223,8 +277,9 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                         }
                         // show new direction
                         if (!mDestinationTextView.getText().toString().equals(getString(R.string.choose_destination))) {
-                            moveMapTo(mOrigin.getLatLng(), DEFAULT_ZOOM_LEVEL);
-                            showDirections(mOrigin.getId(), mDestination.getId());
+                            LatLng originLatLng = mOrigin != null ? mOrigin.getLatLng() : mCurrentLatLng;
+                            moveMapTo(originLatLng, DEFAULT_ZOOM_LEVEL);
+                            showDirections(originLatLng, mDestination.getLatLng(), true);
                         }
                         break;
                     case PlaceAutocomplete.RESULT_ERROR:
@@ -243,8 +298,23 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
+        switch (requestCode) {
+            case RC_LOCATION_PERMISSIONS:
+                if (grantResults.length > 0
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    enableLocationFeatures();
+                }
+                return;
+            default:
+                super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        }
+    }
+
     @SuppressWarnings("SameParameterValue")
-    private void moveMapTo(final LatLng latLng, final int zoom) {
+    private void moveMapTo(@NonNull final LatLng latLng, final int zoom) {
         mMapFragment.getMapAsync(new OnMapReadyCallback() {
             @Override
             public void onMapReady(GoogleMap googleMap) {
@@ -253,14 +323,18 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         });
     }
 
-    private void showDirections(String originId, String destinationId) {
-        boolean drawNewRoutes = mPolylines.size() == 0;
-        showDirections(originId, destinationId, DEFAULT_MODE, drawNewRoutes);
+    private void showDirections(@NonNull LatLng originLatLng, @NonNull LatLng destinationLatLng,
+                                boolean drawNewRoutes) {
+        showDirections(originLatLng, destinationLatLng, DEFAULT_MODE, drawNewRoutes);
     }
 
-    private void showDirections(String originId, String destinationId, String mode,
-                                final boolean drawNewRoutes) {
-        String url = DirectionUtil.getDirectionUrl(originId, destinationId, mode);
+    private void showDirections(@NonNull LatLng originLatLng, @NonNull LatLng destinationLatLng,
+                                String mode, boolean drawNewRoutes) {
+        String url = DirectionUtil.getDirectionUrl(originLatLng, destinationLatLng, mode);
+        requestDirections(url, drawNewRoutes);
+    }
+
+    private void requestDirections(@NonNull String url, final boolean drawNewRoutes) {
         JsonObjectRequest jsObjRequest = new JsonObjectRequest
                 (Request.Method.GET, url, null, new Response.Listener<JSONObject>() {
                     @Override
@@ -296,7 +370,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         mRequestQueue.add(jsObjRequest);
     }
 
-    private void drawRoutes(JSONArray routes) {
+    private void drawRoutes(@NonNull JSONArray routes) {
         try {
             mPolylines.clear();
             for (int i = 0; i < routes.length(); i++) {
@@ -315,7 +389,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
      * @param routeIdx  the specified route's index
      *                  this parameter is for determining which polylines to update when click event is fired
      */
-    private void drawRoute(JSONObject route, int routeIdx) throws JSONException {
+    private void drawRoute(@NonNull JSONObject route, int routeIdx) throws JSONException {
         int color = routeIdx == mPrimaryRouteIdx ? mPrimaryRouteColor : mAlternativeRoutesColor;
 
         JSONObject leg = route.getJSONArray("legs").getJSONObject(0);   // only one leg for 2 waypoints
@@ -336,7 +410,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
      * @param latLngs latitude and longitude of current step
      * @param color route's color
      */
-    private void addPolyline(final int routeIdx, final List<LatLng> latLngs, int color) {
+    private void addPolyline(final int routeIdx, @NonNull final List<LatLng> latLngs, int color) {
         final PolylineOptions options = DirectionUtil.getPolylineOptions(latLngs, color)
                 .zIndex(color == mPrimaryRouteColor ? 1 : 0);           // chosen route will be shown on top
         mMapFragment.getMapAsync(new OnMapReadyCallback() {
@@ -369,7 +443,10 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
      *
      * @param route the JSONObject containing the route's info
      */
-    private void populatePrimaryRouteInfo(JSONObject route) throws JSONException {
+    private void populatePrimaryRouteInfo(@NonNull JSONObject route) throws JSONException {
+        mBottomSheetBehavior.setHideable(false);
+        mBottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+
         // summary
         TextView summaryTextView = findViewById(R.id.tv_route_summary);
         String summary = route.getString("summary");
