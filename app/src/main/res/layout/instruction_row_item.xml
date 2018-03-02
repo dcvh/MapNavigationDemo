@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:layout_marginTop="24dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        tools:ignore="UseCompoundDrawables">
+
+        <ImageView
+            android:id="@+id/iv_direction_icon"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:contentDescription="@string/direction_icon"
+            android:padding="16dp" />
+
+        <TextView
+            android:id="@+id/tv_instruction"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="8dp">
+
+        <Space
+            android:layout_width="56dp"
+            android:layout_height="match_parent" />
+
+        <TextView
+            android:id="@+id/tv_distance"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:layout_constraintLeft_toLeftOf="@+id/tv_instruction"
+            app:layout_constraintTop_toBottomOf="@+id/tv_instruction" />
+
+        <Space
+            android:layout_width="16dp"
+            android:layout_height="match_parent" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"
+            android:layout_gravity="center_vertical"
+            android:background="@color/gray_100" />
+
+    </LinearLayout>
+
+</LinearLayout>

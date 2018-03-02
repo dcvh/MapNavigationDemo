@@ -3,4 +3,7 @@
     <string name="your_location">Your location</string>
     <string name="choose_destination">Choose destination</string>
     <string name="user_cancel">You canceled the operation</string>
+    <string name="steps">Steps</string>
+    <string name="unknown">Unknown</string>
+    <string name="direction_icon">Direction icon</string>
 </resources>

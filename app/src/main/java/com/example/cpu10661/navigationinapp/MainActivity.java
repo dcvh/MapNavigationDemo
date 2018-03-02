@@ -2,17 +2,20 @@ package com.example.cpu10661.navigationinapp;
 
 import android.content.Intent;
 import android.graphics.Color;
-import android.net.Uri;
-import android.support.annotation.IdRes;
-import android.support.annotation.StringRes;
+import android.os.Build;
+import android.support.annotation.NonNull;
+import android.support.design.widget.BottomSheetBehavior;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
-import android.util.SparseArray;
 import android.view.View;
+import android.view.ViewTreeObserver;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -26,7 +29,7 @@ import com.android.volley.toolbox.BasicNetwork;
 import com.android.volley.toolbox.DiskBasedCache;
 import com.android.volley.toolbox.HurlStack;
 import com.android.volley.toolbox.JsonObjectRequest;
-import com.android.volley.toolbox.Volley;
+import com.example.cpu10661.navigationinapp.Utils.DirectionUtil;
 import com.example.cpu10661.navigationinapp.Utils.PolyUtil;
 import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
 import com.google.android.gms.common.GooglePlayServicesRepairableException;
@@ -37,20 +40,16 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
-import com.google.android.gms.maps.model.JointType;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
-import com.google.android.gms.maps.model.RoundCap;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class MainActivity extends AppCompatActivity implements OnMapReadyCallback, GoogleMap.OnPolylineClickListener {
 
@@ -58,14 +57,20 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private static final int DEFAULT_ZOOM_LEVEL = 16;
     private static final int RC_CHOOSE_DEPARTURE = 1;
     private static final int RC_CHOOSE_DESTINATION = 2;
-    private static final Uri.Builder mBaseMapsUriBuilder =
-            Uri.parse("https://maps.googleapis.com/maps/api/directions/json?").buildUpon();
+
+    private static final String DEFAULT_MODE = "driving";
 
     private TextView mOriginTextView, mDestinationTextView;
+    private BottomSheetBehavior mBottomSheetBehavior;
 
     private SupportMapFragment mMapFragment;
     private Place mOrigin, mDestination;
-    private List<Polyline> mPolylines;
+    @NonNull
+    private List<Polyline> mPolylines = new ArrayList<>();
+    private int mPrimaryRouteIdx = 0;
+
+    private int mPrimaryRouteColor;
+    private int mAlternativeRoutesColor = Color.GRAY;
 
     private RequestQueue mRequestQueue;
 
@@ -78,6 +83,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         initUiComponents();
 
         initVolleyComponents();
+
+        mPrimaryRouteColor = ContextCompat.getColor(this, R.color.colorPrimary);
     }
 
     private void initToolbar() {
@@ -110,7 +117,23 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         });
 
+        // bottom sheet
+        setUpBottomSheet();
 
+        // peek height
+        final LinearLayout peekLinearLayout = findViewById(R.id.ll_peek);
+        peekLinearLayout.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+            public void onGlobalLayout() {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+                    peekLinearLayout.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                } else {
+                    peekLinearLayout.getViewTreeObserver().removeGlobalOnLayoutListener(this);
+                }
+
+                int peekHeight = peekLinearLayout.getHeight();
+                mBottomSheetBehavior.setPeekHeight(peekHeight);
+            }
+        });
     }
 
     private void launchAutoCompleteActivity(int requestCode) {
@@ -124,6 +147,29 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
+    private void setUpBottomSheet() {
+        LinearLayout bottomSheetLinearLayout = findViewById(R.id.ll_bottom_sheet);
+        mBottomSheetBehavior = BottomSheetBehavior.from(bottomSheetLinearLayout);
+        mBottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+
+        mBottomSheetBehavior.setBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
+            @Override
+            public void onStateChanged(@NonNull View bottomSheet, int newState) {
+                switch (newState) {
+                    case BottomSheetBehavior.STATE_DRAGGING:
+                        break;
+                    case BottomSheetBehavior.STATE_COLLAPSED:
+                        break;
+                }
+            }
+
+            @Override
+            public void onSlide(@NonNull View bottomSheet, float slideOffset) {
+
+            }
+        });
+    }
+
     private void initVolleyComponents() {
         Cache cache = new DiskBasedCache(getCacheDir(), 1024 * 1024); // 1MB cap
         Network network = new BasicNetwork(new HurlStack());
@@ -131,14 +177,13 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         mRequestQueue.start();
     }
 
-    @SuppressWarnings("SameParameterValue")
-    private void moveMapTo(final LatLng latLng, final int zoom) {
-        mMapFragment.getMapAsync(new OnMapReadyCallback() {
-            @Override
-            public void onMapReady(GoogleMap googleMap) {
-                googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, zoom));
-            }
-        });
+    @Override
+    public void onBackPressed() {
+        if (mBottomSheetBehavior.getState() == BottomSheetBehavior.STATE_EXPANDED) {
+            mBottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+            return;
+        }
+        super.onBackPressed();
     }
 
     /**
@@ -147,12 +192,17 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     @Override
     public void onMapReady(GoogleMap map) {
         // for testing on emulator
-        LatLng latLng = new LatLng(10.7639435, 106.6540708);
-        map.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, DEFAULT_ZOOM_LEVEL));
-        showDirection("ChIJM0vYoOwudTERalKdR-Apj7k", "ChIJ3eH0BhwvdTERPZpT1PEAOQQ", "driving");
+//        LatLng latLng = new LatLng(10.7639435, 106.6540708);
+//        map.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, DEFAULT_ZOOM_LEVEL));
+//        showDirections("ChIJM0vYoOwudTERalKdR-Apj7k", "ChIJ3eH0BhwvdTERPZpT1PEAOQQ");
 
         map.setOnPolylineClickListener(this);
-//        map.addMarker(new MarkerOptions().position(new LatLng(0, 0)).title("Marker"));
+    }
+
+    @Override
+    public void onPolylineClick(Polyline clickedPolyline) {
+        mPrimaryRouteIdx = (int) clickedPolyline.getTag();
+        showDirections(mOrigin.getId(), mDestination.getId());
     }
 
     @Override
@@ -174,7 +224,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                         // show new direction
                         if (!mDestinationTextView.getText().toString().equals(getString(R.string.choose_destination))) {
                             moveMapTo(mOrigin.getLatLng(), DEFAULT_ZOOM_LEVEL);
-                            showDirection(mOrigin.getId(), mDestination.getId());
+                            showDirections(mOrigin.getId(), mDestination.getId());
                         }
                         break;
                     case PlaceAutocomplete.RESULT_ERROR:
@@ -193,19 +243,24 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
-    private void showDirection(String originId, String destinationId) {
-        showDirection(originId, destinationId, "driving");
+    @SuppressWarnings("SameParameterValue")
+    private void moveMapTo(final LatLng latLng, final int zoom) {
+        mMapFragment.getMapAsync(new OnMapReadyCallback() {
+            @Override
+            public void onMapReady(GoogleMap googleMap) {
+                googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, zoom));
+            }
+        });
     }
 
-    private void showDirection(String originId, String destinationId, String mode) {
-        String url = mBaseMapsUriBuilder
-                .appendQueryParameter("origin", "place_id:" + originId)
-                .appendQueryParameter("destination", "place_id:" + destinationId)
-                .appendQueryParameter("mode", mode)                         // driving, walking, bicycling, transit
-                .appendQueryParameter("alternatives", "true")                // alternative routes
-                .appendQueryParameter("key", getString(R.string.google_maps_key))
-                .toString();
+    private void showDirections(String originId, String destinationId) {
+        boolean drawNewRoutes = mPolylines.size() == 0;
+        showDirections(originId, destinationId, DEFAULT_MODE, drawNewRoutes);
+    }
 
+    private void showDirections(String originId, String destinationId, String mode,
+                                final boolean drawNewRoutes) {
+        String url = DirectionUtil.getDirectionUrl(originId, destinationId, mode);
         JsonObjectRequest jsObjRequest = new JsonObjectRequest
                 (Request.Method.GET, url, null, new Response.Listener<JSONObject>() {
                     @Override
@@ -214,13 +269,15 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                             String status = response.getString("status");
                             if (status.equals("OK")) {
                                 JSONArray routes = response.getJSONArray("routes");
-                                drawDirections(routes);
-                            } else {
-                                String message = response.getString("error_message");
-                                if (message == null) {
-                                    message = status;
+                                if (drawNewRoutes) {
+                                    DirectionUtil.removeAllPolylines(mPolylines);
+                                    drawRoutes(routes);
+                                } else {
+                                    updateRoutes();
                                 }
-                                Log.w(TAG, message);
+                                populatePrimaryRouteInfo(routes.getJSONObject(mPrimaryRouteIdx));
+                            } else {
+                                String message = DirectionUtil.getDirectionResponseError(response);
                                 Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
                             }
                         } catch (JSONException e) {
@@ -234,62 +291,118 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                         error.printStackTrace();
                     }
                 });
+
+        jsObjRequest.setShouldCache(true);
         mRequestQueue.add(jsObjRequest);
     }
 
-    private void drawDirections(JSONArray routes) {
-        int colorPrimary = ContextCompat.getColor(this, R.color.colorPrimary);
+    private void drawRoutes(JSONArray routes) {
         try {
-            mPolylines = new ArrayList<>();
-            for (int legIdx = 0; legIdx < routes.length(); legIdx++) {
-                JSONObject firstLeg = routes.getJSONObject(legIdx).getJSONArray("legs").getJSONObject(0);
-                JSONArray steps = firstLeg.getJSONArray("steps");
-                int polylineColor = legIdx == 0 ? colorPrimary : Color.GRAY;
-                for (int stepIdx = 0; stepIdx < steps.length(); stepIdx++) {
-                    JSONObject step = steps.getJSONObject(stepIdx);
-                    String polyline = step.getJSONObject("polyline").getString("points");
-                    List<LatLng> latLngs = PolyUtil.decode(polyline);
-                    addPolyline(legIdx, latLngs, polylineColor);
-                }
+            mPolylines.clear();
+            for (int i = 0; i < routes.length(); i++) {
+                JSONObject route = routes.getJSONObject(i);
+                drawRoute(route, i);
             }
         } catch (JSONException e) {
             e.printStackTrace();
         }
     }
 
-    private void addPolyline(final int legIdx, final List<LatLng> latLngs, int color) {
-        final PolylineOptions options = new PolylineOptions()
-                .color(color)
-                .width(20)                              // TODO: 3/1/18 should be responsive with zoom level
-                .startCap(new RoundCap())
-                .endCap(new RoundCap())
-                .zIndex(color != Color.GRAY ? 1 : 0)    // chosen route will be shown on top
-                .clickable(true)
-                .addAll(latLngs);
+    /**
+     * add polylines in the specified route
+     *
+     * @param route the JSONObject containing the route info
+     * @param routeIdx  the specified route's index
+     *                  this parameter is for determining which polylines to update when click event is fired
+     */
+    private void drawRoute(JSONObject route, int routeIdx) throws JSONException {
+        int color = routeIdx == mPrimaryRouteIdx ? mPrimaryRouteColor : mAlternativeRoutesColor;
+
+        JSONObject leg = route.getJSONArray("legs").getJSONObject(0);   // only one leg for 2 waypoints
+        JSONArray steps = leg.getJSONArray("steps");
+        for (int stepIdx = 0; stepIdx < steps.length(); stepIdx++) {
+            JSONObject step = steps.getJSONObject(stepIdx);
+            String polyline = step.getJSONObject("polyline").getString("points");
+            List<LatLng> latLngs = PolyUtil.decode(polyline);
+            addPolyline(routeIdx, latLngs, color);
+        }
+    }
+
+    /**
+     * add polylines in the specified step
+     *
+     * @param routeIdx  the specified route's index
+     *                  this parameter is for determining which polylines to update when click event is fired
+     * @param latLngs latitude and longitude of current step
+     * @param color route's color
+     */
+    private void addPolyline(final int routeIdx, final List<LatLng> latLngs, int color) {
+        final PolylineOptions options = DirectionUtil.getPolylineOptions(latLngs, color)
+                .zIndex(color == mPrimaryRouteColor ? 1 : 0);           // chosen route will be shown on top
         mMapFragment.getMapAsync(new OnMapReadyCallback() {
             @Override
             public void onMapReady(GoogleMap googleMap) {
                 Polyline polyline = googleMap.addPolyline(options);
-                polyline.setTag(legIdx);
+                polyline.setTag(routeIdx);
                 mPolylines.add(polyline);
             }
         });
     }
 
-    @Override
-    public void onPolylineClick(Polyline clickedPolyline) {
-        int primaryColor = ContextCompat.getColor(this, R.color.colorPrimary);
-        int alternativeColor = Color.GRAY;
-
-        int clickedTag = (int) clickedPolyline.getTag();
+    /**
+     * highlight the newly chosen route, and revert other routes to normal state
+     */
+    private void updateRoutes() {
         for (Polyline polyline : mPolylines) {
-            if ((int)polyline.getTag() == clickedTag) {
-                polyline.setColor(primaryColor);
+            if ((int)polyline.getTag() == mPrimaryRouteIdx) {
+                polyline.setColor(mPrimaryRouteColor);
                 polyline.setZIndex(1);
             } else {
-                polyline.setColor(alternativeColor);
+                polyline.setColor(mAlternativeRoutesColor);
                 polyline.setZIndex(0);
             }
         }
+    }
+
+    /**
+     * show current chosen route's info, including summary, duration, distance and detailed instructions
+     *
+     * @param route the JSONObject containing the route's info
+     */
+    private void populatePrimaryRouteInfo(JSONObject route) throws JSONException {
+        // summary
+        TextView summaryTextView = findViewById(R.id.tv_route_summary);
+        String summary = route.getString("summary");
+        summaryTextView.setText(summary);
+
+        // duration + distance
+        JSONObject leg = route.getJSONArray("legs").getJSONObject(0);   // only one leg for 2 waypoints
+        String duration = leg.getJSONObject("duration").getString("text");
+        String distance = leg.getJSONObject("distance").getString("text");
+        String info = duration != null ?
+                String.format("%s (%s)", duration, distance) :
+                getString(R.string.unknown);
+        TextView durationDistanceTextView = findViewById(R.id.tv_duration_distance);
+        durationDistanceTextView.setText(info);
+
+        // steps
+        JSONArray stepsJsonArray = leg.getJSONArray("steps");
+        List<Step> steps = new ArrayList<>(stepsJsonArray.length());
+        for (int i = 0; i < stepsJsonArray.length(); i++) {
+            JSONObject stepObj = stepsJsonArray.getJSONObject(i);
+            duration = stepObj.getJSONObject("duration").getString("text");
+            distance = stepObj.getJSONObject("distance").getString("text");
+            String instruction = stepObj.getString("html_instructions");
+            String travelMode = stepObj.getString("travel_mode");
+            String maneuver = !stepObj.isNull("maneuver") ? stepObj.getString("maneuver") : "";
+            Step step = new Step(duration, distance, instruction, travelMode, maneuver);
+            steps.add(step);
+        }
+
+        // steps list view
+        RecyclerView stepsListView = findViewById(R.id.rv_steps);
+        stepsListView.setLayoutManager(new LinearLayoutManager(this));
+        StepListAdapter adapter = new StepListAdapter(steps);
+        stepsListView.setAdapter(adapter);
     }
 }
