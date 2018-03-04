@@ -330,7 +330,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private void showDirections(@NonNull LatLng originLatLng, @NonNull LatLng destinationLatLng,
                                 String mode, boolean drawNewRoutes) {
-        String url = DirectionUtil.getDirectionUrl(originLatLng, destinationLatLng, mode);
+        String url = DirectionUtil.getDirectionUrl(originLatLng, destinationLatLng, mode, this);
         requestDirections(url, drawNewRoutes);
     }
 

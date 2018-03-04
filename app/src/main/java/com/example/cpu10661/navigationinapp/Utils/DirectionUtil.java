@@ -1,5 +1,6 @@
 package com.example.cpu10661.navigationinapp.Utils;
 
+import android.content.Context;
 import android.net.Uri;
 import android.support.annotation.DrawableRes;
 import android.support.annotation.NonNull;
@@ -41,7 +42,7 @@ public class DirectionUtil {
 
     @NonNull
     public static String getDirectionUrl(@NonNull LatLng originLatLng, @NonNull LatLng destLatLng,
-                                         @Nullable String mode) {
+                                         @Nullable String mode, @NonNull Context context) {
         if (mode == null) {
             mode = DEFAULT_MODE;
         }
@@ -52,7 +53,8 @@ public class DirectionUtil {
                 .appendQueryParameter("destination", destination)
                 .appendQueryParameter("mode", mode)                     // driving, walking, bicycling, transit
                 .appendQueryParameter("alternatives", "true")           // alternative routes
-                .appendQueryParameter("key", MAPS_API_KEY)
+                .appendQueryParameter("key", context.getString(R.string.google_maps_key))           // temporary workaround
+//                .appendQueryParameter("key", MAPS_API_KEY)
                 .toString();
     }
 
