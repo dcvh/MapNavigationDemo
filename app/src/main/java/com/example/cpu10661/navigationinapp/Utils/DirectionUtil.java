@@ -7,6 +7,7 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Log;
 
+import com.example.cpu10661.navigationinapp.BuildConfig;
 import com.example.cpu10661.navigationinapp.R;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Polyline;
@@ -26,7 +27,6 @@ import java.util.List;
 public class DirectionUtil {
     private static final String TAG = DirectionUtil.class.getSimpleName();
 
-    private static final String MAPS_API_KEY = "AIzaSyDxrHjTi9Nak8rdvdyro15aGB6X0XPrxyo";
     private static final Uri mBaseMapsUri =
             Uri.parse("https://maps.googleapis.com/maps/api/directions/json?");
     private static final String DEFAULT_MODE = "driving";
@@ -42,7 +42,7 @@ public class DirectionUtil {
 
     @NonNull
     public static String getDirectionUrl(@NonNull LatLng originLatLng, @NonNull LatLng destLatLng,
-                                         @Nullable String mode, @NonNull Context context) {
+                                         @Nullable String mode) {
         if (mode == null) {
             mode = DEFAULT_MODE;
         }
@@ -53,8 +53,7 @@ public class DirectionUtil {
                 .appendQueryParameter("destination", destination)
                 .appendQueryParameter("mode", mode)                     // driving, walking, bicycling, transit
                 .appendQueryParameter("alternatives", "true")           // alternative routes
-                .appendQueryParameter("key", context.getString(R.string.google_maps_key))           // temporary workaround
-//                .appendQueryParameter("key", MAPS_API_KEY)
+                .appendQueryParameter("key", BuildConfig.MAPS_API_KEY)
                 .toString();
     }
 

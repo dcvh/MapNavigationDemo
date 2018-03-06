@@ -60,7 +60,8 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity implements OnMapReadyCallback, GoogleMap.OnPolylineClickListener {
+public class MainActivity extends AppCompatActivity
+        implements OnMapReadyCallback, GoogleMap.OnPolylineClickListener {
 
     private static final String TAG = MainActivity.class.getSimpleName();
     private static final int DEFAULT_ZOOM_LEVEL = 16;
@@ -330,7 +331,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private void showDirections(@NonNull LatLng originLatLng, @NonNull LatLng destinationLatLng,
                                 String mode, boolean drawNewRoutes) {
-        String url = DirectionUtil.getDirectionUrl(originLatLng, destinationLatLng, mode, this);
+        String url = DirectionUtil.getDirectionUrl(originLatLng, destinationLatLng, mode);
         requestDirections(url, drawNewRoutes);
     }
 
